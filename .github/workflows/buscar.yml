@@ -1,0 +1,82 @@
+name: Buscar récords
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutos:
+        description: "Minutos por búsqueda (máx. ~330)"
+        default: "120"
+      semilla_base:
+        description: "Semilla base (cámbiala en cada lanzamiento)"
+        default: "100"
+
+jobs:
+  buscar:
+    name: n=${{ matrix.n }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { n: 9,  s: 5.309101, init: n9 }
+          - { n: 10, s: 5.463802, init: n10 }
+          - { n: 13, s: 6.309101, init: n13 }
+          - { n: 14, s: 6.463802, init: n15 }
+          - { n: 18, s: 7.309101, init: n18 }
+          - { n: 19, s: 7.463802, init: n19 }
+          - { n: 21, s: 7.618502, init: n21 }
+          - { n: 24, s: 8.309101, init: n24 }
+          - { n: 25, s: 8.463802, init: n25 }
+          - { n: 27, s: 8.618502, init: n27 }
+          - { n: 28, s: 8.773203, init: n28 }
+          - { n: 31, s: 9.309101, init: n31 }
+          - { n: 32, s: 9.463802, init: n32 }
+          - { n: 33, s: 9.618502, init: n34 }
+          - { n: 35, s: 9.773203, init: n36 }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compilar
+        run: cc -O3 -march=native -Wall -o packer packer.c -lm
+      - name: Buscar (un proceso por núcleo)
+        env:
+          N: ${{ matrix.n }}
+          S: ${{ matrix.s }}
+          INIT: ${{ matrix.init }}
+          MIN: ${{ inputs.minutos }}
+          BASE: ${{ inputs.semilla_base }}
+        run: |
+          mkdir -p out && cd out
+          secs=$((MIN * 60))
+          cores=$(nproc)
+          echo "n=$N s_objetivo=$S núcleos=$cores segundos=$secs"
+          for i in $(seq 0 $((cores - 1))); do
+            seed=$((BASE + i))
+            if [ $((i % 2)) -eq 0 ]; then
+              ../packer $N $secs $seed $S fixed ../init/$INIT.txt > n${N}_s${seed}.log 2>&1 &
+            else
+              ../packer $N $secs $seed $S fixed > n${N}_s${seed}.log 2>&1 &
+            fi
+          done
+          wait
+          if grep -l "factible" *.log; then
+            echo "### n=$N: ¡HALLAZGO! revisar artefacto" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "n=$N: sin hallazgos" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Verificar hallazgos
+        if: always()
+        env:
+          S: ${{ matrix.s }}
+        run: |
+          cd out
+          rec=$(awk "BEGIN{printf \"%.6f\", $S + 0.0003}")
+          for f in best_n*_seed*.txt; do
+            [ -f "$f" ] || continue
+            python3 ../verify.py "$f" "$rec" | tee -a "$GITHUB_STEP_SUMMARY" || true
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resultados-n${{ matrix.n }}
+          path: out/
