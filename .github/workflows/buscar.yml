@@ -4,36 +4,68 @@ on:
   workflow_dispatch:
     inputs:
       minutos:
-        description: "Minutos por búsqueda (máx. ~330)"
+        description: "Minutos por búsqueda (máx. 330)"
         default: "120"
       semilla_base:
         description: "Semilla base (cámbiala en cada lanzamiento)"
         default: "100"
+      margen:
+        description: "Cuánto más pequeño que el récord debe ser el triángulo"
+        default: "0.00005"
+      ns:
+        description: "Valores de n a buscar, separados por comas"
+        default: "9,10,13,14,18,19,21,24,25,27,28,31,32,33,35"
+      copias:
+        description: "Máquinas por cada n (1-3)"
+        default: "1"
 
 jobs:
-  buscar:
-    name: n=${{ matrix.n }}
+  preparar:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
+    outputs:
+      matriz: ${{ steps.m.outputs.matriz }}
+    steps:
+      - id: m
+        env:
+          NS: ${{ inputs.ns }}
+          COPIAS: ${{ inputs.copias }}
+        run: |
+          # n récord_actual configuración_inicial
+          tabla="9 5.309401077 n9
+          10 5.464101615 n10
+          13 6.309401077 n13
+          14 6.464101615 n15
+          18 7.309401077 n18
+          19 7.464101615 n19
+          21 7.618802154 n21
+          24 8.309401077 n24
+          25 8.464101615 n25
+          27 8.618802154 n27
+          28 8.773502692 n28
+          31 9.309401077 n31
+          32 9.464101615 n32
+          33 9.618802154 n34
+          35 9.773502692 n36"
+          items=""
+          for n in $(echo "$NS" | tr ',' ' '); do
+            fila=$(echo "$tabla" | awk -v n="$n" '$1==n {print $2, $3}')
+            [ -n "$fila" ] || { echo "n=$n no está en la tabla"; exit 1; }
+            set -- $fila
+            for c in $(seq 0 $((COPIAS - 1))); do
+              items="$items{\"n\":$n,\"rec\":\"$1\",\"init\":\"$2\",\"copia\":$c},"
+            done
+          done
+          echo "matriz={\"include\":[${items%,}]}" >> "$GITHUB_OUTPUT"
+          echo "matriz={\"include\":[${items%,}]}"
+
+  buscar:
+    needs: preparar
+    name: n=${{ matrix.n }} (${{ matrix.copia }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { n: 9,  s: 5.309101, init: n9 }
-          - { n: 10, s: 5.463802, init: n10 }
-          - { n: 13, s: 6.309101, init: n13 }
-          - { n: 14, s: 6.463802, init: n15 }
-          - { n: 18, s: 7.309101, init: n18 }
-          - { n: 19, s: 7.463802, init: n19 }
-          - { n: 21, s: 7.618502, init: n21 }
-          - { n: 24, s: 8.309101, init: n24 }
-          - { n: 25, s: 8.463802, init: n25 }
-          - { n: 27, s: 8.618502, init: n27 }
-          - { n: 28, s: 8.773203, init: n28 }
-          - { n: 31, s: 9.309101, init: n31 }
-          - { n: 32, s: 9.463802, init: n32 }
-          - { n: 33, s: 9.618502, init: n34 }
-          - { n: 35, s: 9.773203, init: n36 }
+      matrix: ${{ fromJSON(needs.preparar.outputs.matriz) }}
     steps:
       - uses: actions/checkout@v4
       - name: Compilar
@@ -41,17 +73,20 @@ jobs:
       - name: Buscar (un proceso por núcleo)
         env:
           N: ${{ matrix.n }}
-          S: ${{ matrix.s }}
+          REC: ${{ matrix.rec }}
           INIT: ${{ matrix.init }}
+          COPIA: ${{ matrix.copia }}
           MIN: ${{ inputs.minutos }}
           BASE: ${{ inputs.semilla_base }}
+          MARGEN: ${{ inputs.margen }}
         run: |
           mkdir -p out && cd out
+          S=$(awk "BEGIN{printf \"%.9f\", $REC - $MARGEN}")
           secs=$((MIN * 60))
           cores=$(nproc)
-          echo "n=$N s_objetivo=$S núcleos=$cores segundos=$secs"
+          echo "n=$N récord=$REC s_objetivo=$S núcleos=$cores segundos=$secs"
           for i in $(seq 0 $((cores - 1))); do
-            seed=$((BASE + i))
+            seed=$((BASE + COPIA * 10 + i))
             if [ $((i % 2)) -eq 0 ]; then
               ../packer $N $secs $seed $S fixed ../init/$INIT.txt > n${N}_s${seed}.log 2>&1 &
             else
@@ -67,16 +102,15 @@ jobs:
       - name: Verificar hallazgos
         if: always()
         env:
-          S: ${{ matrix.s }}
+          REC: ${{ matrix.rec }}
         run: |
           cd out
-          rec=$(awk "BEGIN{printf \"%.6f\", $S + 0.0003}")
           for f in best_n*_seed*.txt; do
             [ -f "$f" ] || continue
-            python3 ../verify.py "$f" "$rec" | tee -a "$GITHUB_STEP_SUMMARY" || true
+            python3 ../verify.py "$f" "$REC" | tee -a "$GITHUB_STEP_SUMMARY" || true
           done
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: resultados-n${{ matrix.n }}
+          name: resultados-n${{ matrix.n }}-c${{ matrix.copia }}
           path: out/
