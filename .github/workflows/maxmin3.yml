@@ -1,0 +1,80 @@
+name: Cociente máx/mín de distancias en 3D (tabla de Friedman)
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutos:
+        description: "Minutos de búsqueda (máx. 330)"
+        default: "330"
+      semilla_base:
+        description: "Semilla base (cámbiala en cada lanzamiento)"
+        default: "300000"
+      maquinas:
+        description: "Número de máquinas (máx. 20)"
+        default: "20"
+
+jobs:
+  preparar:
+    runs-on: ubuntu-latest
+    outputs:
+      matriz: ${{ steps.m.outputs.matriz }}
+    steps:
+      - id: m
+        env:
+          M: ${{ inputs.maquinas }}
+        run: echo "matriz=[$(seq -s, 0 $((M - 1)))]" >> "$GITHUB_OUTPUT"
+
+  buscar:
+    needs: preparar
+    name: máquina ${{ matrix.m }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        m: ${{ fromJSON(needs.preparar.outputs.matriz) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compilar
+        run: cc -O3 -march=native -Wall -o mm3/mm3 mm3/mm3.c -lm
+      - name: Buscar
+        env:
+          MI: ${{ matrix.m }}
+          M: ${{ inputs.maquinas }}
+          MIN: ${{ inputs.minutos }}
+          BASE: ${{ inputs.semilla_base }}
+        run: |
+          mkdir -p out && cd out
+          secs=$((MIN * 60))
+          grep -v '^#' ../mm3/trabajos.txt | awk -v m="$MI" -v M="$M" '(NR - 1) % M == m' > mios.txt
+          echo "Trabajos de esta máquina:"; cat mios.txt
+          i=0
+          while read -r N; do
+            seed=$((BASE + MI * 100 + i))
+            REC=$(awk -v n="$N" '$1 == n {print $2}' ../mm3/records.txt)
+            [ "$REC" = "-" ] && REC=0
+            ../mm3/mm3 $N $secs $seed - $REC > n${N}_seed${seed}.log 2>&1 &
+            i=$((i + 1))
+          done < mios.txt
+          wait
+      - name: Resumen y verificación
+        if: always()
+        run: |
+          cd out
+          for f in best_n*_seed*.txt; do
+            [ -f "$f" ] || continue
+            N=$(echo "$f" | sed -E 's/best_n([0-9]+)_.*/\1/')
+            REC=$(awk -v n="$N" '$1 == n {print $2}' ../mm3/records.txt)
+            if [ "$REC" = "-" ]; then
+              echo "$f (n=$N, sin valor publicado): $(python3 ../mm3/verify_mm3.py "$f")" >> "$GITHUB_STEP_SUMMARY"
+            else
+              res=$(python3 ../mm3/verify_mm3.py "$f" "$REC" | tr '\n' ' ')
+              marca=""; echo "$res" | grep -q "MEJORA SEGURA" && marca="### ¡MEJORA SEGURA!"
+              echo "$f (récord $REC): $res $marca" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mm3-m${{ matrix.m }}
+          path: out/

@@ -30,3 +30,14 @@ El mayor subconjunto de la cuadrícula n×n sin tres puntos que formen un trián
 - `isos/isos.c`: búsqueda tabú con conteo incremental de violaciones (mediatrices y círculos), con simetría opcional.
 - `isos/verify_isos.py`: verificación exacta con enteros.
 - `isos/trabajos.txt` y `.github/workflows/isosceles.yml`: reparto de 80 búsquedas entre 20 máquinas.
+
+## Cociente máx/mín de distancias en 3D
+
+Tabla de Friedman: <https://erich-friedman.github.io/packing/maxmin3/>. Se buscan
+n puntos en el espacio que minimicen r² = (distancia máxima / distancia mínima)².
+
+- `mm3/mm3.c`: optimizador (umbral creciente + L-BFGS + saltos entre cuencas).
+  Uso: `./mm3 n segundos semilla [inicial|-] [récord_r2]`.
+- `mm3/verify_mm3.py`: calcula r² exactamente (aritmética racional) a partir de
+  las coordenadas y lo compara con el récord publicado.
+- Flujo `maxmin3.yml`: 80 búsquedas para n = 15–40 (n = 31–40 no tienen valor publicado).
