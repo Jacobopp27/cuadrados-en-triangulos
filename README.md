@@ -16,3 +16,9 @@ Erich Friedman). Para cada n, intenta meter los cuadrados en un triángulo
 - `verify_poly.py`: superposiciones verificadas con aritmética racional exacta; contención con 80 dígitos y margen de 1e-30.
 - `objetivos.txt`: los 120 récords objetivo (K, n, valor publicado, autor).
 - `.github/workflows/poligonos.yml`: reparte los objetivos entre varias máquinas (Actions → "Buscar récords en polígonos").
+
+## Pulir desde los récords
+
+- `digitize_poly.py`: lee la imagen de un récord y estima centro y ángulo de cada cuadrado.
+- `initpoly/`: las 100 configuraciones récord digitalizadas que la búsqueda a ciegas no alcanzó.
+- `objetivos_pulir.txt` y `.github/workflows/pulir.yml`: compresión y basin hopping partiendo de cada récord (Actions → "Pulir récords en polígonos").

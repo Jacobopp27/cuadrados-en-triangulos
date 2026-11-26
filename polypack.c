@@ -446,7 +446,8 @@ int main(int argc, char **argv) {
     }
     while (now() - t0 < budget) {
         double cur;
-        if (initfile && restarts == 0) {
+        if (initfile) {
+            // con archivo inicial, cada reinicio vuelve a partir de él (con ruido a partir del segundo)
             FILE *f = fopen(initfile, "r"); int n2; double sv, mdv;
             if (!f || fscanf(f, "%d %lf %lf%*[^\n]", &n2, &sv, &mdv) != 3 || (n2 != N && n2 != N + 1)) { fprintf(stderr, "archivo inicial inválido\n"); return 1; }
             for (int i = 0; i < n2; i++) if (fscanf(f, "%lf %lf %lf", &X[i], &Y[i], &T[i]) != 3) return 1;
@@ -455,6 +456,10 @@ int main(int argc, char **argv) {
                 int k = (int)(seed % (unsigned long long)n2);
                 X[k] = X[N]; Y[k] = Y[N]; T[k] = T[N];
                 printf("quitando el cuadrado %d de la configuración de %d\n", k, n2);
+            }
+            if (restarts > 0) {
+                double amp = 0.01 + 0.05 * urand();
+                for (int i = 0; i < N; i++) { X[i] += amp * (urand() - 0.5); Y[i] += amp * (urand() - 0.5); T[i] += amp * (urand() - 0.5); }
             }
             update_trig();
             cur = compress(sv, 1);
