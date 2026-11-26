@@ -22,3 +22,11 @@ Erich Friedman). Para cada n, intenta meter los cuadrados en un triángulo
 - `digitize_poly.py`: lee la imagen de un récord y estima centro y ángulo de cada cuadrado.
 - `initpoly/`: las 100 configuraciones récord digitalizadas que la búsqueda a ciegas no alcanzó.
 - `objetivos_pulir.txt` y `.github/workflows/pulir.yml`: compresión y basin hopping partiendo de cada récord (Actions → "Pulir récords en polígonos").
+
+## Cuadrículas sin triángulos isósceles (problema 6.59 de AlphaEvolve)
+
+El mayor subconjunto de la cuadrícula n×n sin tres puntos que formen un triángulo isósceles (incluido el caso degenerado del punto medio). Mejores valores de AlphaEvolve: 112 puntos (n=64) y 164 (n=100).
+
+- `isos/isos.c`: búsqueda tabú con conteo incremental de violaciones (mediatrices y círculos), con simetría opcional.
+- `isos/verify_isos.py`: verificación exacta con enteros.
+- `isos/trabajos.txt` y `.github/workflows/isosceles.yml`: reparto de 80 búsquedas entre 20 máquinas.

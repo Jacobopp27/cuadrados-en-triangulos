@@ -1,0 +1,76 @@
+name: Sin triángulos isósceles (problema 6.59 de AlphaEvolve)
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutos:
+        description: "Minutos de búsqueda (máx. 330)"
+        default: "330"
+      semilla_base:
+        description: "Semilla base (cámbiala en cada lanzamiento)"
+        default: "100000"
+      maquinas:
+        description: "Número de máquinas (máx. 20)"
+        default: "20"
+
+jobs:
+  preparar:
+    runs-on: ubuntu-latest
+    outputs:
+      matriz: ${{ steps.m.outputs.matriz }}
+    steps:
+      - id: m
+        env:
+          M: ${{ inputs.maquinas }}
+        run: echo "matriz=[$(seq -s, 0 $((M - 1)))]" >> "$GITHUB_OUTPUT"
+
+  buscar:
+    needs: preparar
+    name: máquina ${{ matrix.m }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        m: ${{ fromJSON(needs.preparar.outputs.matriz) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compilar
+        run: cc -O3 -march=native -Wall -o isos/isos isos/isos.c
+      - name: Buscar
+        env:
+          MI: ${{ matrix.m }}
+          M: ${{ inputs.maquinas }}
+          MIN: ${{ inputs.minutos }}
+          BASE: ${{ inputs.semilla_base }}
+        run: |
+          mkdir -p out && cd out
+          secs=$((MIN * 60))
+          grep -v '^#' ../isos/trabajos.txt | awk -v m="$MI" -v M="$M" '(NR - 1) % M == m' > mios.txt
+          echo "Trabajos de esta máquina:"; cat mios.txt
+          i=0
+          while read -r N SYM INIT; do
+            seed=$((BASE + MI * 100 + i))
+            [ "$INIT" = "-" ] && ini="-" || ini="../isos/$INIT"
+            ../isos/isos $N $secs $seed $ini $SYM > n${N}_sym${SYM}_seed${seed}.log 2>&1 &
+            i=$((i + 1))
+          done < mios.txt
+          wait
+      - name: Resumen y verificación
+        if: always()
+        run: |
+          cd out
+          for f in best_*.txt; do
+            [ -f "$f" ] || continue
+            N=$(echo "$f" | sed -E 's/best_n([0-9]+)_.*/\1/')
+            pts=$(grep -vc '^#' "$f")
+            rec=$([ "$N" = 64 ] && echo 112 || echo 164)
+            marca=""; [ "$pts" -gt "$rec" ] && marca="### ¡SUPERA A ALPHAEVOLVE ($rec)!"
+            echo "$f: $pts puntos (AlphaEvolve: $rec) $marca" >> "$GITHUB_STEP_SUMMARY"
+            python3 ../isos/verify_isos.py "$N" "$f" | tee -a "$GITHUB_STEP_SUMMARY" || true
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: isos-m${{ matrix.m }}
+          path: out/
