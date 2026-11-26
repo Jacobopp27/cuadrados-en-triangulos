@@ -41,3 +41,10 @@ n puntos en el espacio que minimicen r² = (distancia máxima / distancia mínim
 - `mm3/verify_mm3.py`: calcula r² exactamente (aritmética racional) a partir de
   las coordenadas y lo compara con el récord publicado.
 - Flujo `maxmin3.yml`: 80 búsquedas para n = 15–40 (n = 31–40 no tienen valor publicado).
+
+## Valores exactos (OEIS A271907)
+
+`isos/exacto.py` calcula con demostración (CP-SAT) el mayor conjunto de la cuadrícula n×n sin
+triángulos isósceles, en la versión de OEIS (tres puntos en línea no cuentan como triángulo;
+con `--degenerado` se usa la versión de AlphaEvolve). Reproduce a(6..9) = 10, 12, 14, 16.
+`isos/lns.py` reconstruye exactamente una región de una solución dada. Flujo: `exacto.yml`.

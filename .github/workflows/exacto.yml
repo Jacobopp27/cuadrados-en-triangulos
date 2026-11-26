@@ -1,0 +1,46 @@
+name: Valores exactos sin isósceles (OEIS A271907)
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutos:
+        description: "Minutos por valor de n (máx. 330)"
+        default: "330"
+      valores_n:
+        description: "Lista de n en formato JSON"
+        default: "[10, 11, 12, 13, 14]"
+
+jobs:
+  exacto:
+    name: n = ${{ matrix.n }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        n: ${{ fromJSON(inputs.valores_n) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar OR-Tools
+        run: pip install ortools
+      - name: Resolver (versión OEIS, sin caso degenerado)
+        env:
+          N: ${{ matrix.n }}
+          MIN: ${{ inputs.minutos }}
+        run: |
+          mkdir -p out
+          secs=$((MIN * 60 - 900))
+          python isos/exacto.py $N $secs 4 out/sol_n${N}.txt | tee out/resultado_n${N}.txt
+      - name: Resumen
+        if: always()
+        env:
+          N: ${{ matrix.n }}
+        run: cat out/resultado_n${N}.txt >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: exacto-n${{ matrix.n }}
+          path: out/
