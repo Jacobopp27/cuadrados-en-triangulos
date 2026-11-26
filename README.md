@@ -9,3 +9,10 @@ Erich Friedman). Para cada n, intenta meter los cuadrados en un triángulo
 - `verify.py`: verificación exacta con aritmética racional.
 - `init/`: configuraciones récord digitalizadas, usadas como punto de partida.
 - `.github/workflows/buscar.yml`: lanza una máquina por récord (pestaña Actions → "Buscar récords" → Run workflow).
+
+## Polígonos regulares (pentágonos, hexágonos, octágonos)
+
+- `polypack.c`: generalización a un polígono regular de K lados (`./polypack K n segundos semilla s fixed`).
+- `verify_poly.py`: superposiciones verificadas con aritmética racional exacta; contención con 80 dígitos y margen de 1e-30.
+- `objetivos.txt`: los 120 récords objetivo (K, n, valor publicado, autor).
+- `.github/workflows/poligonos.yml`: reparte los objetivos entre varias máquinas (Actions → "Buscar récords en polígonos").

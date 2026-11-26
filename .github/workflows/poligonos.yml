@@ -1,0 +1,84 @@
+name: Buscar récords en polígonos
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutos:
+        description: "Minutos de búsqueda (máx. 330)"
+        default: "330"
+      semilla_base:
+        description: "Semilla base (cámbiala en cada lanzamiento)"
+        default: "1000"
+      maquinas:
+        description: "Número de máquinas (máx. 20)"
+        default: "20"
+      filtro:
+        description: "Solo objetivos cuyo 'K n' empiece así (vacío = todos; ej. '5 ' = pentágonos)"
+        default: ""
+
+jobs:
+  preparar:
+    runs-on: ubuntu-latest
+    outputs:
+      matriz: ${{ steps.m.outputs.matriz }}
+    steps:
+      - id: m
+        env:
+          M: ${{ inputs.maquinas }}
+        run: echo "matriz=[$(seq -s, 0 $((M - 1)))]" >> "$GITHUB_OUTPUT"
+
+  buscar:
+    needs: preparar
+    name: máquina ${{ matrix.m }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        m: ${{ fromJSON(needs.preparar.outputs.matriz) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compilar
+        run: cc -O3 -march=native -Wall -o polypack polypack.c -lm
+      - name: Buscar
+        env:
+          MI: ${{ matrix.m }}
+          M: ${{ inputs.maquinas }}
+          MIN: ${{ inputs.minutos }}
+          BASE: ${{ inputs.semilla_base }}
+          FILTRO: ${{ inputs.filtro }}
+        run: |
+          mkdir -p out && cd out
+          secs=$((MIN * 60))
+          grep -v '^#' ../objetivos.txt | grep "^$FILTRO" | awk -v m="$MI" -v M="$M" '(NR - 1) % M == m' > mios.txt
+          echo "Objetivos de esta máquina:"; cat mios.txt
+          i=0
+          while read -r K N REC AUTOR; do
+            # el valor publicado está truncado: el récord real está en [REC, REC + 10^-decimales)
+            dec=${REC#*.}; ventana=$(awk -v d=${#dec} 'BEGIN{printf "%.12f", 10^(-d)}')
+            S=$(awk -v r="$REC" -v w="$ventana" 'BEGIN{printf "%.9f", r + w}')
+            seed=$((BASE + MI * 100 + i))
+            ../polypack $K $N $secs $seed $S fixed > K${K}_n${N}.log 2>&1 &
+            i=$((i + 1))
+          done < mios.txt
+          wait
+      - name: Resumen y verificación
+        if: always()
+        run: |
+          cd out
+          while read -r K N REC AUTOR; do
+            f=$(ls best_K${K}_n${N}_seed*.txt 2>/dev/null | head -1)
+            if [ -z "$f" ]; then
+              echo "K=$K n=$N récord $REC ($AUTOR): nada por debajo del límite" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            s=$(head -1 "$f" | awk '{printf "%.6f", $2}')
+            marca=$(awk -v s="$s" -v r="$REC" 'BEGIN{ if (s < r) print "### ¡MEJORA SEGURA!"; else print "(empata o queda dentro del redondeo: revisar)" }')
+            echo "K=$K n=$N récord $REC ($AUTOR): obtuvimos $s $marca" >> "$GITHUB_STEP_SUMMARY"
+            python3 ../verify_poly.py "$f" "$REC" | tee -a "$GITHUB_STEP_SUMMARY" || true
+          done < mios.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poligonos-m${{ matrix.m }}
+          path: out/
